@@ -1,6 +1,7 @@
 CREATE TYPE atm_status AS ENUM('Operational', 'In-Transport', 'Maintenance', 'Offline');
 CREATE TYPE service_call_priority AS ENUM('Low','Medium', 'Critical');
 CREATE TYPE service_call_status AS ENUM('Pending', 'In-Progress', 'Completed', 'Failed');
+CREATE TYPE user_role AS ENUM('Admin', 'Technician', 'Auditor');
 
 CREATE TABLE branches(
     id SERIAL PRIMARY KEY,
@@ -41,4 +42,12 @@ CREATE TABLE diagnostic_reports(
     file_url TEXT NOT NULL,
     notes TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE users(
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    hashed_password VARCHAR(255) NOT NULL,
+    role user_role NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );

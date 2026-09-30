@@ -3,7 +3,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from app.schemas.service_call import ColocationDiscrepancyRead, ReliabilitiyMetric, ServiceCallRead, ServiceCallStatusUpdate
+from app.schemas.service_call import ColocationDiscrepancyRead, ReliabilityMetric, ServiceCallRead, ServiceCallStatusUpdate
 from app.dependencies import get_current_user, get_db, require_role
 from app.models.enums import ServiceCallPriority, ServiceCallStatus, UserRole
 from app.models.user import User
@@ -17,7 +17,7 @@ router =APIRouter(prefix= "/service-call", tags=["service-call"])
 @router.get("/discrepancies", response_model=list[ColocationDiscrepancyRead])
 async def get_colocation_dependancies(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user), priority: ServiceCallPriority | None = Query(
     default= None,
-    description="Only return discrepancies for work orders of this priority"
+    description="Only return discrepancies for service calls of this priority"
 )):
     statement = (select(ServiceCall.id.label("service_call_id"),
                         ServiceCall.title,
@@ -34,7 +34,7 @@ async def get_colocation_dependancies(db: AsyncSession = Depends(get_db), curren
     result = await db.execute(statement)
     return [dict(row) for row in result.mappings().all()]
 
-@router.get("/reliability", response_model=[ReliabilitiyMetric])
+@router.get("/reliability", response_model=list[ReliabilityMetric])
 async def reliability_metrics(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
@@ -42,7 +42,7 @@ async def reliability_metrics(
     statement = (
         select(
             Atm.model,
-            func.count(ServiceCall.id).label("total_work_orders"),
+            func.count(ServiceCall.id).label("total_service_calls"),
             func.sum(
                 case(
                     (ServiceCall.status == ServiceCallStatus.COMPLETED, 1),
@@ -70,7 +70,7 @@ async def reliability_metrics(
 
 
 @router.get(path="/{service_call_id}", response_model=ServiceCallRead)
-async def get_work_order(service_call_id:int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user))-> ServiceCall:
+async def get_service_call(service_call_id:int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user))-> ServiceCall:
         service_call = await db.get(ServiceCall, service_call_id)
         if service_call is None:
             raise HTTPException(
@@ -80,14 +80,14 @@ async def get_work_order(service_call_id:int, db: AsyncSession = Depends(get_db)
         return service_call
 
 @router.patch("/{service_call_id}/status", response_model=ServiceCallRead)
-async def update_work_order_status(service_call_id: int, update: ServiceCallStatusUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.TECHNICIAN)),):
+async def update_service_call_status(service_call_id: int, update: ServiceCallStatusUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.TECHNICIAN)),):
     statement = (select(ServiceCall).where(ServiceCall.id == service_call_id))
     result = await db.execute(statement)
     service_call =  result.scalars().first()
     if service_call is None:
         raise HTTPException(
             status_code= status.HTTP_404_NOT_FOUND,
-            detail= "Work_order not found"
+            detail= "service_call not found"
         )
     if update.status == ServiceCallStatus.COMPLETED:
         service_call.mark_completed()

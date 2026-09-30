@@ -5,16 +5,16 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordBearer
-
+import jwt
 
 from app.database import AsyncSessionLocal
 from app.models.user import User
-from backend.app.models.enums import UserRole
-from backend.app.security import decode_access_token
+from app.models.enums import UserRole
+from app.security import decode_access_token
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal as session:
+    async with AsyncSessionLocal() as session:
         yield session
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")

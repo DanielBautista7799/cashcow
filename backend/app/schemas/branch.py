@@ -15,4 +15,4 @@ class TechnicianActiveServiceCalls(BaseModel):
 class ReportingLineResult(BaseModel):
     supervisor_id:int
     technician_count: int
-    technician: list[TechnicianActiveServiceCalls]
+    technicians: list[TechnicianActiveServiceCalls]

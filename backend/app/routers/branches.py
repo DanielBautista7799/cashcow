@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, APIRouter, Query
 from sqlalchemy import case, func, select
 
 from app.schemas.branch import MaintenanceFlag, ReportingLineResult, TechnicianActiveServiceCalls
@@ -13,10 +13,10 @@ from app.models.service_call import ServiceCall
 from app.models.technician import Technician
 
 
-router = FastAPI("/branches", tags=["branches"])
+router = APIRouter(prefix="/branches", tags=["branches"])
 
 @router.get("/maintenance-flags", response_model=list[MaintenanceFlag])
-async def maintenance_flags( current_user:User = get_current_user(), db: AsyncSession = get_db()):
+async def maintenance_flags( current_user:User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     maintenance_count = func.sum(
     case(
         (Atm.status == AtmStatus.MAINTENANCE, 1),
@@ -32,15 +32,15 @@ async def maintenance_flags( current_user:User = get_current_user(), db: AsyncSe
 
     statement = (
         select(
-            Branch.id.label("Branch_id"),
-            Branch.name.label("Branch_name"),
-            total_atms.label("total_equipment"),
+            Branch.id.label("branch_id"),
+            Branch.name.label("branch_name"),
+            total_atms.label("total_atms"),
             maintenance_count.label("maintenance_count"),
             maintenance_pct.label("maintenance_percentage"),
         )
         .join(
             Atm,
-            Atm.facility_id == Branch.id,
+            Atm.branch_id == Branch.id,
         )
         .group_by(
             Branch.id,

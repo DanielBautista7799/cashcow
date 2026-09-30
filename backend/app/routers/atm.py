@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 
 
-router = APIRouter(prefix="/equipment", tags=["equipment"])
+router = APIRouter(prefix="/atms", tags=["atms"])
 
 @router.get("", response_model=list[AtmRead])
 async def list_atms(max_cash: Decimal | None = Query(
@@ -37,7 +37,7 @@ async def list_atms(max_cash: Decimal | None = Query(
 
 #payload means that the user must send a response in the JSON format so ti can be stored in payload
 @router.post(path="", response_model=AtmRead, status_code= status.HTTP_201_CREATED)
-async def create_equipment(payload: AtmCreate,current_user: User = Depends(
+async def create_atm(payload: AtmCreate,current_user: User = Depends(
     require_role(UserRole.ADMIN)
 ), db: AsyncSession = Depends(get_db)):
     #** spreads it across the equpment argumanets .modeldump turns the pydantic obj and turns it into python
@@ -49,12 +49,12 @@ async def create_equipment(payload: AtmCreate,current_user: User = Depends(
     charge_level=payload.charge_level,
     facility_id=payload.facility_id
 )"""
-    equipment = Atm(**payload.model_dump())
+    atm = Atm(**payload.model_dump())
     #no need to be waited on just a stage 
-    db.add(equipment)
+    db.add(atm)
     await db.commit()
     #update so it appears
-    await db.refresh(equipment)
+    await db.refresh(atm)
 
-    return equipment
+    return atm
 
