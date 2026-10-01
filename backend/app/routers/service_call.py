@@ -48,13 +48,13 @@ async def reliability_metrics(
                     (ServiceCall.status == ServiceCallStatus.COMPLETED, 1),
                     else_=0,
                 )
-            ).label("completed_count"),
+            ).label("service_calls_completed"),
             func.sum(
                 case(
                     (ServiceCall.status == ServiceCallStatus.FAILED, 1),
                     else_=0,
                 )
-            ).label("failed_count"),
+            ).label("service_calls_failed"),
         )
         .join(ServiceCall, ServiceCall.atm_id == Atm.id)
         .group_by(Atm.model)
@@ -68,6 +68,17 @@ async def reliability_metrics(
 
 
 
+
+@router.get("", response_model=list[ServiceCallRead])
+async def list_service_calls(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    statement = select(ServiceCall).order_by(ServiceCall.id)
+
+    result = await db.execute(statement)
+
+    return list(result.scalars().all())
 
 @router.get(path="/{service_call_id}", response_model=ServiceCallRead)
 async def get_service_call(service_call_id:int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user))-> ServiceCall:
