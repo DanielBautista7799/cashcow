@@ -1,30 +1,61 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, Stack, Typography } from "@mui/material";
+import {
+Alert,
+Card,
+CardContent,
+CircularProgress,
+Stack,
+Typography,
+} from "@mui/material";
 
 import api from "../../api/client";
 
-
 export default function LowCashAlert() {
 const [atms, setAtms] = useState([]);
+const [loading, setLoading] = useState(true);
 
 useEffect(() => {
 async function fetchLowCashAtms() {
+    try {
     const response = await api.get("/atms", {
-    params: {
+        params: {
         max_cash: 20,
-    },
+        },
     });
 
     setAtms(response.data);
+    } catch (error) {
+    console.error(error);
+    } finally {
+    setLoading(false);
+    }
 }
 
 fetchLowCashAtms();
 }, []);
 
+if (loading) {
+return <CircularProgress />;
+}
+
+if (atms.length === 0) {
+return (
+    <Alert severity="success">
+    No ATMs are currently below the 20% cash threshold.
+    </Alert>
+);
+}
+
 return (
 <Stack spacing={2}>
     {atms.map((atm) => (
-    <Card key={atm.id}>
+    <Card
+        key={atm.id}
+        sx={{
+        borderLeft: 4,
+        borderColor: "error.main",
+        }}
+    >
         <CardContent>
         <Typography variant="h6">
             {atm.serial_number}
@@ -34,7 +65,11 @@ return (
             Model: {atm.model}
         </Typography>
 
-        <Typography>
+        {/* Low cash is the important value, so it is highlighted */}
+        <Typography
+            color="error"
+            fontWeight={600}
+        >
             Cash Level: {atm.cash_level}%
         </Typography>
 

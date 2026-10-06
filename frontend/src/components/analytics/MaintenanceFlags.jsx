@@ -1,40 +1,81 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, Typography, Stack } from "@mui/material";
+import {
+Alert,
+Card,
+CardContent,
+Chip,
+CircularProgress,
+Stack,
+Typography,
+} from "@mui/material";
 
 import api from "../../api/client";
 
-
 export default function MaintenanceFlags() {
-const [branches, setBranches] = useState([]);
+const [flags, setFlags] = useState([]);
+const [loading, setLoading] = useState(true);
 
 useEffect(() => {
-async function fetchFlags() {
-    const response = await api.get("/branches/maintenance-flags");
-    setBranches(response.data);
+async function fetchMaintenanceFlags() {
+    try {
+    const response = await api.get(
+        "/branches/maintenance-flags"
+    );
+
+    setFlags(response.data);
+    } catch (error) {
+    console.error(error);
+    } finally {
+    setLoading(false);
+    }
 }
 
-fetchFlags();
+fetchMaintenanceFlags();
 }, []);
+
+if (loading) {
+return <CircularProgress />;
+}
+
+if (flags.length === 0) {
+return (
+    <Alert severity="success">
+    No branches are above the 30% maintenance threshold.
+    </Alert>
+);
+}
 
 return (
 <Stack spacing={2}>
-    {branches.map((branch) => (
-    <Card key={branch.branch_id}>
+    {flags.map((flag) => (
+    <Card
+        key={flag.branch_id}
+        sx={{
+        borderLeft: 4,
+        borderColor: "warning.main",
+        }}
+    >
         <CardContent>
         <Typography variant="h6">
-            {branch.branch_name}
+            {flag.branch_name}
+        </Typography>
+
+        {/* Makes the maintenance percentage easy to notice */}
+        <Chip
+            label={`${Number(
+            flag.maintenance_percentage
+            ).toFixed(1)}% Maintenance`}
+            color="warning"
+            size="small"
+            sx={{ my: 1 }}
+        />
+
+        <Typography>
+            Total ATMs: {flag.total_atms}
         </Typography>
 
         <Typography>
-            Total ATMs: {branch.total_atms}
-        </Typography>
-
-        <Typography>
-            Maintenance: {branch.maintenance_count}
-        </Typography>
-
-        <Typography>
-            Maintenance Percentage: {branch.maintenance_percentage}%
+            ATMs in Maintenance: {flag.maintenance_count}
         </Typography>
         </CardContent>
     </Card>

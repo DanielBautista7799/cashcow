@@ -1,16 +1,32 @@
 import { useEffect, useState } from "react";
-import { Box, Typography } from "@mui/material";
+import {
+Alert,
+Box,
+Chip,
+CircularProgress,
+} from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 
 import api from "../../api/client";
 
+
 export default function DiscrepancyDataGrid() {
 const [discrepancies, setDiscrepancies] = useState([]);
+const [loading, setLoading] = useState(true);
 
 useEffect(() => {
 async function fetchDiscrepancies() {
-    const response = await api.get("/service-call/discrepancies");
+    try {
+    const response = await api.get(
+        "/service-call/discrepancies"
+    );
+
     setDiscrepancies(response.data);
+    } catch (error) {
+    console.error(error);
+    } finally {
+    setLoading(false);
+    }
 }
 
 fetchDiscrepancies();
@@ -25,33 +41,54 @@ const columns = [
 {
     field: "title",
     headerName: "Title",
-    width: 220,
+    width: 250,
 },
 {
     field: "atm_branch_id",
-    headerName: "ATM Branch",
+    headerName: "ATM Branch ID",
     width: 140,
 },
 {
     field: "technician_branch_id",
-    headerName: "Technician Branch",
+    headerName: "Technician Branch ID",
     width: 170,
+},
+
+// Every row here represents a branch mismatch
+{
+    field: "issue",
+    headerName: "Issue",
+    width: 130,
+    sortable: false,
+    renderCell: () => (
+    <Chip
+        label="Mismatch"
+        color="warning"
+        size="small"
+    />
+    ),
 },
 ];
 
-return (
-<Box sx={{ mt: 4 }}>
-    <Typography variant="h5" sx={{ mb: 2 }}>
-    Co-Location Discrepancies
-    </Typography>
+if (loading) {
+return <CircularProgress />;
+}
 
-    <Box sx={{ height: 400, width: "100%" }}>
+if (discrepancies.length === 0) {
+return (
+    <Alert severity="success">
+    No co-location discrepancies found.
+    </Alert>
+);
+}
+
+return (
+<Box sx={{ height: 350, width: "100%" }}>
     <DataGrid
-        rows={discrepancies}
-        columns={columns}
-        getRowId={(row) => row.service_call_id}
+    rows={discrepancies}
+    columns={columns}
+    getRowId={(row) => row.service_call_id}
     />
-    </Box>
 </Box>
 );
 }

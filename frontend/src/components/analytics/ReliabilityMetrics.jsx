@@ -1,20 +1,40 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, Typography, Stack } from "@mui/material";
+import {
+Card,
+CardContent,
+Chip,
+CircularProgress,
+Stack,
+Typography,
+} from "@mui/material";
 
 import api from "../../api/client";
 
-
 export default function ReliabilityMetrics() {
 const [metrics, setMetrics] = useState([]);
+const [loading, setLoading] = useState(true);
 
 useEffect(() => {
-async function fetchMetrics() {
-    const response = await api.get("/service-call/reliability");
+async function fetchReliabilityMetrics() {
+    try {
+    const response = await api.get(
+        "/service-call/reliability"
+    );
+
     setMetrics(response.data);
+    } catch (error) {
+    console.error(error);
+    } finally {
+    setLoading(false);
+    }
 }
 
-fetchMetrics();
+fetchReliabilityMetrics();
 }, []);
+
+if (loading) {
+return <CircularProgress />;
+}
 
 return (
 <Stack spacing={2}>
@@ -25,17 +45,28 @@ return (
             {metric.model}
         </Typography>
 
-        <Typography>
+        <Typography sx={{ mb: 1 }}>
             Total Service Calls: {metric.total_service_calls}
         </Typography>
 
-        <Typography>
-            Completed: {metric.service_calls_completed}
-        </Typography>
+        {/* Colors make successful and failed outcomes easier to compare */}
+        <Stack direction="row" spacing={1}>
+            <Chip
+            label={`${metric.service_calls_completed} Completed`}
+            color="success"
+            size="small"
+            />
 
-        <Typography>
-            Failed: {metric.service_calls_failed}
-        </Typography>
+            <Chip
+            label={`${metric.service_calls_failed} Failed`}
+            color={
+                metric.service_calls_failed > 0
+                ? "error"
+                : "default"
+            }
+            size="small"
+            />
+        </Stack>
         </CardContent>
     </Card>
     ))}
