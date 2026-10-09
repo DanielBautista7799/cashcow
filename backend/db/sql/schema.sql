@@ -51,3 +51,35 @@ CREATE TABLE users(
     role user_role NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
+
+CREATE TABLE refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    token_hash VARCHAR(64) UNIQUE NOT NULL,
+    chain_id VARCHAR(36) NOT NULL,
+    issued_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE
+);
+
+CREATE INDEX refresh_tokens_token_hash_idx
+ON refresh_tokens(token_hash);
+
+CREATE INDEX refresh_tokens_chain_id_idx
+ON refresh_tokens(chain_id);
+
+-- Server-side pagination indexes
+CREATE INDEX IF NOT EXISTS atms_status_idx
+ON atms(status);
+
+CREATE INDEX IF NOT EXISTS atms_branch_id_idx
+ON atms(branch_id);
+
+CREATE INDEX IF NOT EXISTS atms_model_idx
+ON atms(model);
+
+CREATE INDEX IF NOT EXISTS service_calls_status_idx
+ON service_calls(status);
+
+CREATE INDEX IF NOT EXISTS service_calls_atm_id_idx
+ON service_calls(atm_id);

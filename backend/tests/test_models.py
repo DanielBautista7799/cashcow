@@ -7,7 +7,9 @@ from app.models.enums import (
     ServiceCallStatus,
 )
 from app.models.service_call import ServiceCall
-
+from fastapi import HTTPException
+from app.main import healthready
+import asyncio
 
 def make_atm(
     cash_level: Decimal,
@@ -85,3 +87,18 @@ def test_service_call_can_be_marked_failed():
         service_call.status
         == ServiceCallStatus.FAILED
     )
+
+def test_health_ready_returns_503_when_database_unavailable():
+    class BrokenDB:
+        async def execute(self, statement):
+            raise Exception("Database unavailable")
+
+    async def run_test():
+        try:
+            await healthready(BrokenDB())
+            assert False
+        except HTTPException as error:
+            assert error.status_code == 503
+            assert error.detail == "Database unavailable"
+
+    asyncio.run(run_test())
