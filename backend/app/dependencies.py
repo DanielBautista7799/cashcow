@@ -61,3 +61,25 @@ def require_role(*allowed_roles: UserRole):
         return current_user
     return role_checker #returns function with parameters of allowed roles
 
+
+
+# Permission-based authorization.
+# Permissions are resolved from the user's current database role on every request.
+from app.permissions import Permission, permissions_for_role
+
+
+def require_permission(permission: Permission):
+    async def permission_checker(
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        permissions = permissions_for_role(current_user.role)
+
+        if permission not in permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Missing permission: {permission.value}",
+            )
+
+        return current_user
+
+    return permission_checker

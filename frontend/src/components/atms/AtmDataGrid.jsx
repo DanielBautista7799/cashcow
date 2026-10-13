@@ -1,346 +1,397 @@
-import { useEffect, useState } from "react";
 import {
-Alert,
-Box,
-Button,
-Chip,
-CircularProgress,
-Dialog,
-DialogActions,
-DialogContent,
-DialogTitle,
-MenuItem,
-Stack,
-TextField,
-Typography,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
+    useEffect,
+    useState,
+} from "react";
 
+import {
+    Box,
+    Button,
+    MenuItem,
+    TextField,
+} from "@mui/material";
+
+import {
+    DataGrid,
+} from "@mui/x-data-grid";
+
+import api from "../../api/client.js";
 import { useAuth } from "../../context/AuthContext";
-import api from "../../api/client";
+import RecordHistoryDialog from "../audit/RecordHistoryDialog";
+
+
+const baseColumns = [
+    {
+        field: "id",
+        headerName: "ID",
+        width: 80,
+    },
+    {
+        field: "serial_number",
+        headerName: "Serial Number",
+        flex: 1,
+        minWidth: 150,
+    },
+    {
+        field: "model",
+        headerName: "Model",
+        flex: 1,
+        minWidth: 130,
+    },
+    {
+        field: "status",
+        headerName: "Status",
+        flex: 1,
+        minWidth: 140,
+    },
+    {
+        field: "cash_level",
+        headerName: "Cash Level",
+        type: "number",
+        flex: 1,
+        minWidth: 110,
+    },
+    {
+        field: "branch_id",
+        headerName: "Branch ID",
+        type: "number",
+        flex: 1,
+        minWidth: 100,
+    },
+];
 
 
 export default function AtmDataGrid() {
-const { role } = useAuth();
+    const { hasPermission } =
+        useAuth();
 
-const [atms, setAtms] = useState([]);
-const [loading, setLoading] = useState(true);
-const [error, setError] = useState("");
+    const [rows, setRows] =
+        useState([]);
 
-const [search, setSearch] = useState("");
-const [statusFilter, setStatusFilter] = useState("All");
+    const [rowCount, setRowCount] =
+        useState(0);
 
-const [dialogOpen, setDialogOpen] = useState(false);
+    const [loading, setLoading] =
+        useState(false);
 
-const [formValues, setFormValues] = useState({
-serial_number: "",
-model: "",
-status: "Operational",
-cash_level: "",
-branch_id: "",
-});
+    const [reloadKey, setReloadKey] =
+        useState(0);
 
-async function fetchAtms() {
-try {
-    setLoading(true);
-    setError("");
+    const [historyId, setHistoryId] =
+        useState(null);
 
-    const response = await api.get("/atms");
-    setAtms(response.data);
-} catch (error) {
-    console.error(error);
-    setError("Unable to load ATMs.");
-} finally {
-    setLoading(false);
-}
-}
-
-useEffect(() => {
-fetchAtms();
-}, []);
-
-const handleFieldChange = (field) => (event) => {
-setFormValues({
-    ...formValues,
-    [field]: event.target.value,
-});
-};
-
-const handleSubmit = async () => {
-try {
-    await api.post("/atms", {
-    ...formValues,
-    cash_level: Number(formValues.cash_level),
-    branch_id: Number(formValues.branch_id),
+    const [
+        paginationModel,
+        setPaginationModel,
+    ] = useState({
+        page: 0,
+        pageSize: 5,
     });
 
-    setDialogOpen(false);
+    const [sortModel, setSortModel] =
+        useState([]);
 
-    setFormValues({
-    serial_number: "",
-    model: "",
-    status: "Operational",
-    cash_level: "",
-    branch_id: "",
-    });
+    const [search, setSearch] =
+        useState("");
 
-    await fetchAtms();
-} catch (error) {
-    console.error(error);
-    setError("Unable to create ATM.");
-}
-};
+    const [
+        debouncedSearch,
+        setDebouncedSearch,
+    ] = useState("");
 
-const filteredAtms = atms.filter((atm) => {
-const matchesSearch =
-    atm.serial_number
-    .toLowerCase()
-    .includes(search.toLowerCase()) ||
-    atm.model
-    .toLowerCase()
-    .includes(search.toLowerCase());
+    const [status, setStatus] =
+        useState("");
 
-const matchesStatus =
-    statusFilter === "All" ||
-    atm.status === statusFilter;
+    const [branchId, setBranchId] =
+        useState("");
 
-return matchesSearch && matchesStatus;
-});
+    useEffect(() => {
+        const timeout = setTimeout(
+            () => {
+                setDebouncedSearch(
+                    search
+                );
+            },
+            350
+        );
 
-const columns = [
-{
-    field: "id",
-    headerName: "ID",
-    width: 70,
-},
-{
-    field: "serial_number",
-    headerName: "Serial Number",
-    width: 150,
-},
-{
-    field: "model",
-    headerName: "Model",
-    width: 150,
-},
+        return () =>
+            clearTimeout(timeout);
+    }, [search]);
 
-// Color makes ATM status easy to identify
-{
-    field: "status",
-    headerName: "Status",
-    width: 150,
-    renderCell: (params) => {
-    let color = "default";
+    useEffect(() => {
+        const loadAtms =
+            async () => {
+                setLoading(true);
 
-    if (params.value === "Operational") {
-        color = "success";
-    } else if (params.value === "In-Transport") {
-        color = "info";
-    } else if (params.value === "Maintenance") {
-        color = "warning";
-    } else if (params.value === "Offline") {
-        color = "error";
+                try {
+                    const response =
+                        await api.get(
+                            "/atms",
+                            {
+                                preservePage:
+                                    true,
+                                params: {
+                                    page:
+                                        paginationModel.page +
+                                        1,
+                                    size:
+                                        paginationModel.pageSize,
+                                    sort_by:
+                                        sortModel[0]
+                                            ?.field ||
+                                        "id",
+                                    sort_dir:
+                                        sortModel[0]
+                                            ?.sort ||
+                                        "asc",
+                                    search:
+                                        debouncedSearch ||
+                                        undefined,
+                                    status:
+                                        status ||
+                                        undefined,
+                                    branch_id:
+                                        branchId ||
+                                        undefined,
+                                },
+                            }
+                        );
+
+                    setRows(
+                        response.data
+                            .items
+                    );
+
+                    setRowCount(
+                        response.data
+                            .total
+                    );
+                } finally {
+                    setLoading(
+                        false
+                    );
+                }
+            };
+
+        loadAtms();
+    }, [
+        paginationModel,
+        sortModel,
+        debouncedSearch,
+        status,
+        branchId,
+        reloadKey,
+    ]);
+
+    const resetPage = () => {
+        setPaginationModel(
+            (current) => ({
+                ...current,
+                page: 0,
+            })
+        );
+    };
+
+    async function deleteAtm(id) {
+        const confirmed =
+            window.confirm(
+                "Soft delete this ATM?"
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        await api.delete(
+            `/atms/${id}`
+        );
+
+        setReloadKey(
+            (value) => value + 1
+        );
     }
 
+    const columns = [
+        ...baseColumns,
+        {
+            field: "actions",
+            headerName: "Actions",
+            sortable: false,
+            filterable: false,
+            minWidth: 190,
+            renderCell: (params) => (
+                <Box
+                    sx={{
+                        display: "flex",
+                        gap: 1,
+                    }}
+                >
+                    {hasPermission(
+                        "audit:read"
+                    ) && (
+                        <Button
+                            size="small"
+                            onClick={() =>
+                                setHistoryId(
+                                    params.row.id
+                                )
+                            }
+                        >
+                            History
+                        </Button>
+                    )}
+
+                    {hasPermission(
+                        "asset:write"
+                    ) && (
+                        <Button
+                            size="small"
+                            color="error"
+                            onClick={() =>
+                                deleteAtm(
+                                    params.row.id
+                                )
+                            }
+                        >
+                            Delete
+                        </Button>
+                    )}
+                </Box>
+            ),
+        },
+    ];
+
     return (
-        <Chip
-        label={params.value}
-        color={color}
-        size="small"
-        />
+        <Box>
+            <Box
+                sx={{
+                    display: "flex",
+                    gap: 2,
+                    mb: 2,
+                    flexWrap: "wrap",
+                }}
+            >
+                <TextField
+                    label="Search model or serial"
+                    size="small"
+                    value={search}
+                    onChange={(
+                        event
+                    ) => {
+                        setSearch(
+                            event.target
+                                .value
+                        );
+                        resetPage();
+                    }}
+                />
+
+                <TextField
+                    select
+                    label="Status"
+                    size="small"
+                    value={status}
+                    sx={{
+                        minWidth: 160,
+                    }}
+                    onChange={(
+                        event
+                    ) => {
+                        setStatus(
+                            event.target
+                                .value
+                        );
+                        resetPage();
+                    }}
+                >
+                    <MenuItem value="">
+                        All
+                    </MenuItem>
+
+                    <MenuItem value="Operational">
+                        Operational
+                    </MenuItem>
+
+                    <MenuItem value="In-Transport">
+                        In-Transport
+                    </MenuItem>
+
+                    <MenuItem value="Maintenance">
+                        Maintenance
+                    </MenuItem>
+                </TextField>
+
+                <TextField
+                    label="Branch ID"
+                    size="small"
+                    type="number"
+                    value={branchId}
+                    onChange={(
+                        event
+                    ) => {
+                        setBranchId(
+                            event.target
+                                .value
+                        );
+                        resetPage();
+                    }}
+                />
+            </Box>
+
+            <Box
+                sx={{
+                    height: 430,
+                    width: "100%",
+                }}
+            >
+                <DataGrid
+                    rows={rows}
+                    columns={columns}
+                    rowCount={
+                        rowCount
+                    }
+                    loading={loading}
+                    paginationMode="server"
+                    sortingMode="server"
+                    filterMode="server"
+                    paginationModel={
+                        paginationModel
+                    }
+                    onPaginationModelChange={
+                        setPaginationModel
+                    }
+                    sortModel={
+                        sortModel
+                    }
+                    onSortModelChange={(
+                        model
+                    ) => {
+                        setSortModel(
+                            model
+                        );
+                        resetPage();
+                    }}
+                    pageSizeOptions={[
+                        5,
+                        10,
+                        25,
+                        50,
+                        100,
+                    ]}
+                    disableRowSelectionOnClick
+                />
+            </Box>
+
+            <RecordHistoryDialog
+                open={
+                    historyId !== null
+                }
+                recordType="atm"
+                recordId={historyId}
+                onClose={() =>
+                    setHistoryId(null)
+                }
+            />
+        </Box>
     );
-    },
-},
-
-// Cash below 20% is the low-cash alert
-{
-    field: "cash_level",
-    headerName: "Cash Level",
-    width: 130,
-    renderCell: (params) => (
-    <Typography
-        color={
-        Number(params.value) < 20
-            ? "error"
-            : "inherit"
-        }
-        fontWeight={
-        Number(params.value) < 20
-            ? 600
-            : 400
-        }
-    >
-        {params.value}%
-    </Typography>
-    ),
-},
-{
-    field: "branch_id",
-    headerName: "Branch ID",
-    width: 110,
-},
-];
-
-if (loading) {
-return <CircularProgress />;
-}
-
-return (
-<Box>
-    <Typography variant="h5" sx={{ mb: 2 }}>
-    ATM Fleet
-    </Typography>
-
-    {error && (
-    <Alert severity="error" sx={{ mb: 2 }}>
-        {error}
-    </Alert>
-    )}
-
-    <Stack
-    direction="row"
-    spacing={2}
-    sx={{ mb: 2 }}
-    >
-    <TextField
-        size="small"
-        label="Search"
-        value={search}
-        onChange={(event) =>
-        setSearch(event.target.value)
-        }
-    />
-
-    <TextField
-        select
-        size="small"
-        label="Status"
-        value={statusFilter}
-        onChange={(event) =>
-        setStatusFilter(event.target.value)
-        }
-        sx={{ width: 160 }}
-    >
-        <MenuItem value="All">All</MenuItem>
-        <MenuItem value="Operational">
-        Operational
-        </MenuItem>
-        <MenuItem value="In-Transport">
-        In-Transport
-        </MenuItem>
-        <MenuItem value="Maintenance">
-        Maintenance
-        </MenuItem>
-        <MenuItem value="Offline">
-        Offline
-        </MenuItem>
-    </TextField>
-
-    {role === "Admin" && (
-        <Button
-        variant="outlined"
-        onClick={() => setDialogOpen(true)}
-        >
-        Add ATM
-        </Button>
-    )}
-    </Stack>
-
-    <Box sx={{ height: 500, width: "100%" }}>
-    <DataGrid
-        rows={filteredAtms}
-        columns={columns}
-        getRowId={(row) => row.id}
-    />
-    </Box>
-
-    <Dialog
-    open={dialogOpen}
-    onClose={() => setDialogOpen(false)}
-    >
-    <DialogTitle>
-        Add New ATM
-    </DialogTitle>
-
-    <DialogContent>
-        <Stack
-        spacing={2}
-        sx={{ mt: 1, minWidth: 300 }}
-        >
-        <TextField
-            label="Serial Number"
-            value={formValues.serial_number}
-            onChange={handleFieldChange(
-            "serial_number"
-            )}
-        />
-
-        <TextField
-            label="Model"
-            value={formValues.model}
-            onChange={handleFieldChange("model")}
-        />
-
-        <TextField
-            select
-            label="Status"
-            value={formValues.status}
-            onChange={handleFieldChange("status")}
-        >
-            <MenuItem value="Operational">
-            Operational
-            </MenuItem>
-
-            <MenuItem value="In-Transport">
-            In-Transport
-            </MenuItem>
-
-            <MenuItem value="Maintenance">
-            Maintenance
-            </MenuItem>
-
-            <MenuItem value="Offline">
-            Offline
-            </MenuItem>
-        </TextField>
-
-        <TextField
-            label="Cash Level"
-            type="number"
-            value={formValues.cash_level}
-            onChange={handleFieldChange(
-            "cash_level"
-            )}
-        />
-
-        <TextField
-            label="Branch ID"
-            type="number"
-            value={formValues.branch_id}
-            onChange={handleFieldChange(
-            "branch_id"
-            )}
-        />
-        </Stack>
-    </DialogContent>
-
-    <DialogActions>
-        <Button
-        onClick={() =>
-            setDialogOpen(false)
-        }
-        >
-        Cancel
-        </Button>
-
-        <Button
-        variant="contained"
-        onClick={handleSubmit}
-        >
-        Create
-        </Button>
-    </DialogActions>
-    </Dialog>
-</Box>
-);
 }

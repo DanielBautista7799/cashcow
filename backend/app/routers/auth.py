@@ -7,8 +7,9 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.dependencies import get_db, require_role
+from app.dependencies import get_db, require_permission
 from app.models.enums import UserRole
+from app.permissions import Permission, ROLE_PERMISSIONS, permissions_for_role
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.user import RefreshRequest, Token, UserCreate, UserRead
@@ -200,7 +201,7 @@ async def register_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_role(UserRole.ADMIN)
+        require_permission(Permission.USER_MANAGE)
     ),
 ) -> User:
 
@@ -229,3 +230,38 @@ async def register_user(
     await db.refresh(new_user)
 
     return new_user
+
+
+@router.get("/me")
+async def get_me(
+    current_user: User = Depends(
+        require_permission(Permission.SELF_READ)
+    ),
+):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "role": current_user.role.value,
+        "permissions": sorted(
+            permission.value
+            for permission in permissions_for_role(current_user.role)
+        ),
+    }
+
+
+@router.get("/roles")
+async def get_roles(
+    _: User = Depends(
+        require_permission(Permission.USER_MANAGE)
+    ),
+):
+    return [
+        {
+            "role": role.value,
+            "permissions": sorted(
+                permission.value
+                for permission in permissions
+            ),
+        }
+        for role, permissions in ROLE_PERMISSIONS.items()
+    ]

@@ -2,8 +2,9 @@ from fastapi import Depends, APIRouter, Query
 from sqlalchemy import case, func, select
 
 from app.schemas.branch import MaintenanceFlag, ReportingLineResult, TechnicianActiveServiceCalls
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_db, require_permission
 from app.models.user import User
+from app.permissions import Permission
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.atm import Atm
@@ -16,7 +17,7 @@ from app.models.technician import Technician
 router = APIRouter(prefix="/branches", tags=["branches"])
 
 @router.get("/maintenance-flags", response_model=list[MaintenanceFlag])
-async def maintenance_flags( current_user:User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def maintenance_flags( current_user:User = Depends(require_permission(Permission.ANALYTICS_READ)), db: AsyncSession = Depends(get_db)):
     maintenance_count = func.sum(
     case(
         (Atm.status == AtmStatus.MAINTENANCE, 1),
@@ -42,6 +43,9 @@ async def maintenance_flags( current_user:User = Depends(get_current_user), db: 
             Atm,
             Atm.branch_id == Branch.id,
         )
+        .where(
+            Atm.is_active.is_(True)
+        )
         .group_by(
             Branch.id,
             Branch.name,
@@ -63,7 +67,7 @@ async def maintenance_flags( current_user:User = Depends(get_current_user), db: 
 async def reporting_lines(
     supervisor_id: int = Query(...),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_permission(Permission.ANALYTICS_READ)),
 ):
     statement = (
         select(
@@ -79,8 +83,14 @@ async def reporting_lines(
             ServiceCall,
             ServiceCall.technician_id == Technician.id,
         )
+        .join(
+            Atm,
+            Atm.id == ServiceCall.atm_id,
+        )
         .where(
             Branch.supervisor_id == supervisor_id,
+            ServiceCall.is_active.is_(True),
+            Atm.is_active.is_(True),
             ServiceCall.status.in_(
                 [
                     ServiceCallStatus.PENDING,

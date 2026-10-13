@@ -17,12 +17,17 @@ import MaintenanceFlags from "../analytics/MaintenanceFlags";
 import ReportingLines from "../analytics/ReportingLines";
 import LowCashAlert from "../analytics/LowCashAlert";
 import ServiceCallDataGrid from "../serviceCalls/ServiceCallDataGrid";
+import RolePermissions from "../admin/RolePermissions";
+import InactiveRecords from "../admin/InactiveRecords";
 
 import { useAuth } from "../../context/AuthContext";
 import api from "../../api/client";
+import { useColorScheme } from "@mui/material/styles";
 
 export default function Dashboard() {
-const { role, logout } = useAuth();
+const { role, permissions, hasPermission, logout } = useAuth();
+const { mode, systemMode, setMode } = useColorScheme();
+const currentMode = mode === "system" ? systemMode : mode;
 
 // Controls which dashboard tab is currently shown
 const [tab, setTab] = useState(0);
@@ -100,12 +105,24 @@ return (
         </Typography>
     </Box>
 
+    
     <Button
         variant="outlined"
         onClick={logout}
     >
         Logout
+
     </Button>
+
+    
+    {/* Light and dark toggle*/}
+    <Button
+    variant="outlined"
+    aria-label="Toggle dark mode"
+    onClick={() => setMode(currentMode === "dark" ? "light" : "dark")}
+    >
+    {currentMode === "dark" ? "Light Mode" : "Dark Mode"}
+</Button>
     </Box>
 
     {/* Switch between the main dashboard sections */}
@@ -123,6 +140,13 @@ return (
     <Tab label="Overview" />
     <Tab label="Operations" />
     <Tab label="Analytics" />
+    {hasPermission("user:manage") && (
+        <Tab label="Roles" />
+    )}
+
+    {hasPermission("asset:write") && (
+        <Tab label="Inactive" />
+    )}
     </Tabs>
 
     {/* Overview Tab */}
@@ -325,6 +349,17 @@ return (
         </Box>
     </Box>
     )}
+    {/* Roles Tab - only shown when API permissions allow it */}
+    {tab === 3 &&
+        hasPermission("user:manage") && (
+            <RolePermissions />
+        )}
+
+    {tab === 4 &&
+        hasPermission("asset:write") && (
+            <InactiveRecords />
+        )}
+
 </Container>
 );
 }

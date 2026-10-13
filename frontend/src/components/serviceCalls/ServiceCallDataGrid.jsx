@@ -1,240 +1,401 @@
-import { useEffect, useState } from "react";
 import {
-Alert,
-Box,
-Chip,
-CircularProgress,
-MenuItem,
-Stack,
-TextField,
-Typography,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
+    useEffect,
+    useState,
+} from "react";
 
-import api from "../../api/client";
+import {
+    Box,
+    Button,
+    MenuItem,
+    TextField,
+} from "@mui/material";
+
+import {
+    DataGrid,
+} from "@mui/x-data-grid";
+
+import api from "../../api/client.js";
 import { useAuth } from "../../context/AuthContext";
+import RecordHistoryDialog from "../audit/RecordHistoryDialog";
+
+
+const baseColumns = [
+    {
+        field: "id",
+        headerName: "ID",
+        width: 80,
+    },
+    {
+        field: "title",
+        headerName: "Title",
+        flex: 1,
+        minWidth: 180,
+    },
+    {
+        field: "priority",
+        headerName: "Priority",
+        flex: 1,
+        minWidth: 110,
+    },
+    {
+        field: "status",
+        headerName: "Status",
+        flex: 1,
+        minWidth: 130,
+    },
+    {
+        field: "atm_id",
+        headerName: "ATM ID",
+        type: "number",
+        width: 100,
+    },
+    {
+        field: "technician_id",
+        headerName: "Technician ID",
+        type: "number",
+        width: 130,
+    },
+];
+
 
 export default function ServiceCallDataGrid() {
-const { role } = useAuth();
+    const { hasPermission } =
+        useAuth();
 
-const [serviceCalls, setServiceCalls] = useState([]);
-const [loading, setLoading] = useState(true);
-const [error, setError] = useState("");
+    const [rows, setRows] =
+        useState([]);
 
-const [search, setSearch] = useState("");
-const [priorityFilter, setPriorityFilter] = useState("All");
-const [statusFilter, setStatusFilter] = useState("All");
+    const [rowCount, setRowCount] =
+        useState(0);
 
-async function fetchServiceCalls() {
-try {
-    setLoading(true);
-    setError("");
+    const [loading, setLoading] =
+        useState(false);
 
-    const response = await api.get("/service-call");
-    setServiceCalls(response.data);
-} catch (error) {
-    console.error(error);
-    setError("Unable to load service calls.");
-} finally {
-    setLoading(false);
-}
-}
+    const [reloadKey, setReloadKey] =
+        useState(0);
 
-useEffect(() => {
-fetchServiceCalls();
-}, []);
+    const [historyId, setHistoryId] =
+        useState(null);
 
-const handleStatusChange = async (serviceCallId, newStatus) => {
-try {
-    await api.patch(`/service-call/${serviceCallId}/status`, {
-    status: newStatus,
+    const [
+        paginationModel,
+        setPaginationModel,
+    ] = useState({
+        page: 0,
+        pageSize: 5,
     });
 
-    await fetchServiceCalls();
-} catch (error) {
-    console.error(error);
-    setError("Unable to update service call.");
-}
-};
+    const [sortModel, setSortModel] =
+        useState([]);
 
-const filteredServiceCalls = serviceCalls.filter((serviceCall) => {
-const matchesSearch = serviceCall.title
-    .toLowerCase()
-    .includes(search.toLowerCase());
+    const [search, setSearch] =
+        useState("");
 
-const matchesPriority =
-    priorityFilter === "All" ||
-    serviceCall.priority === priorityFilter;
+    const [
+        debouncedSearch,
+        setDebouncedSearch,
+    ] = useState("");
 
-const matchesStatus =
-    statusFilter === "All" ||
-    serviceCall.status === statusFilter;
+    const [status, setStatus] =
+        useState("");
 
-return matchesSearch && matchesPriority && matchesStatus;
-});
+    const [branchId, setBranchId] =
+        useState("");
 
-const columns = [
-{
-    field: "id",
-    headerName: "ID",
-    width: 70,
-},
-{
-    field: "title",
-    headerName: "Title",
-    width: 220,
-},
+    useEffect(() => {
+        const timeout = setTimeout(
+            () => {
+                setDebouncedSearch(
+                    search
+                );
+            },
+            350
+        );
 
-// Critical calls stand out without changing any service-call logic
-{
-    field: "priority",
-    headerName: "Priority",
-    width: 120,
-    renderCell: (params) => {
-    let color = "success";
+        return () =>
+            clearTimeout(timeout);
+    }, [search]);
 
-    if (params.value === "Medium") {
-        color = "warning";
-    } else if (params.value === "Critical") {
-        color = "error";
-    }
+    useEffect(() => {
+        const loadServiceCalls =
+            async () => {
+                setLoading(true);
 
-    return (
-        <Chip
-        label={params.value}
-        color={color}
-        size="small"
-        />
-    );
-    },
-},
+                try {
+                    const response =
+                        await api.get(
+                            "/service-call",
+                            {
+                                preservePage:
+                                    true,
+                                params: {
+                                    page:
+                                        paginationModel.page +
+                                        1,
+                                    size:
+                                        paginationModel.pageSize,
+                                    sort_by:
+                                        sortModel[0]
+                                            ?.field ||
+                                        "id",
+                                    sort_dir:
+                                        sortModel[0]
+                                            ?.sort ||
+                                        "asc",
+                                    search:
+                                        debouncedSearch ||
+                                        undefined,
+                                    status:
+                                        status ||
+                                        undefined,
+                                    branch_id:
+                                        branchId ||
+                                        undefined,
+                                },
+                            }
+                        );
 
-// Auditor stays read-only while Admin and Technician can update status
-{
-    field: "status",
-    headerName: "Status",
-    width: 180,
-    renderCell: (params) => {
-    if (role === "Auditor") {
-        let color = "default";
+                    setRows(
+                        response.data
+                            .items
+                    );
 
-        if (params.value === "In-Progress") {
-        color = "info";
-        } else if (params.value === "Completed") {
-        color = "success";
-        } else if (params.value === "Failed") {
-        color = "error";
-        } else if (params.value === "Pending") {
-        color = "warning";
+                    setRowCount(
+                        response.data
+                            .total
+                    );
+                } finally {
+                    setLoading(
+                        false
+                    );
+                }
+            };
+
+        loadServiceCalls();
+    }, [
+        paginationModel,
+        sortModel,
+        debouncedSearch,
+        status,
+        branchId,
+        reloadKey,
+    ]);
+
+    const resetPage = () => {
+        setPaginationModel(
+            (current) => ({
+                ...current,
+                page: 0,
+            })
+        );
+    };
+
+    async function deleteServiceCall(
+        id
+    ) {
+        const confirmed =
+            window.confirm(
+                "Soft delete this service call?"
+            );
+
+        if (!confirmed) {
+            return;
         }
 
-        return (
-        <Chip
-            label={params.value}
-            color={color}
-            size="small"
-        />
+        await api.delete(
+            `/service-call/${id}`
+        );
+
+        setReloadKey(
+            (value) => value + 1
         );
     }
 
+    const columns = [
+        ...baseColumns,
+        {
+            field: "actions",
+            headerName: "Actions",
+            sortable: false,
+            filterable: false,
+            minWidth: 190,
+            renderCell: (params) => (
+                <Box
+                    sx={{
+                        display: "flex",
+                        gap: 1,
+                    }}
+                >
+                    {hasPermission(
+                        "audit:read"
+                    ) && (
+                        <Button
+                            size="small"
+                            onClick={() =>
+                                setHistoryId(
+                                    params.row.id
+                                )
+                            }
+                        >
+                            History
+                        </Button>
+                    )}
+
+                    {hasPermission(
+                        "job:write"
+                    ) && (
+                        <Button
+                            size="small"
+                            color="error"
+                            onClick={() =>
+                                deleteServiceCall(
+                                    params.row.id
+                                )
+                            }
+                        >
+                            Delete
+                        </Button>
+                    )}
+                </Box>
+            ),
+        },
+    ];
+
     return (
-        <TextField
-        select
-        size="small"
-        value={params.value}
-        onChange={(event) =>
-            handleStatusChange(
-            params.row.id,
-            event.target.value
-            )
-        }
-        sx={{ width: 145 }}
-        >
-        <MenuItem value="Pending">Pending</MenuItem>
-        <MenuItem value="In-Progress">In-Progress</MenuItem>
-        <MenuItem value="Completed">Completed</MenuItem>
-        <MenuItem value="Failed">Failed</MenuItem>
-        </TextField>
+        <Box>
+            <Box
+                sx={{
+                    display: "flex",
+                    gap: 2,
+                    mb: 2,
+                    flexWrap: "wrap",
+                }}
+            >
+                <TextField
+                    label="Search"
+                    size="small"
+                    value={search}
+                    onChange={(
+                        event
+                    ) => {
+                        setSearch(
+                            event.target
+                                .value
+                        );
+                        resetPage();
+                    }}
+                />
+
+                <TextField
+                    select
+                    label="Status"
+                    size="small"
+                    value={status}
+                    sx={{
+                        minWidth: 160,
+                    }}
+                    onChange={(
+                        event
+                    ) => {
+                        setStatus(
+                            event.target
+                                .value
+                        );
+                        resetPage();
+                    }}
+                >
+                    <MenuItem value="">
+                        All
+                    </MenuItem>
+
+                    <MenuItem value="Pending">
+                        Pending
+                    </MenuItem>
+
+                    <MenuItem value="In-Progress">
+                        In-Progress
+                    </MenuItem>
+
+                    <MenuItem value="Completed">
+                        Completed
+                    </MenuItem>
+
+                    <MenuItem value="Failed">
+                        Failed
+                    </MenuItem>
+                </TextField>
+
+                <TextField
+                    label="Branch ID"
+                    size="small"
+                    type="number"
+                    value={branchId}
+                    onChange={(
+                        event
+                    ) => {
+                        setBranchId(
+                            event.target
+                                .value
+                        );
+                        resetPage();
+                    }}
+                />
+            </Box>
+
+            <Box
+                sx={{
+                    height: 430,
+                    width: "100%",
+                }}
+            >
+                <DataGrid
+                    rows={rows}
+                    columns={columns}
+                    rowCount={
+                        rowCount
+                    }
+                    loading={loading}
+                    paginationMode="server"
+                    sortingMode="server"
+                    filterMode="server"
+                    paginationModel={
+                        paginationModel
+                    }
+                    onPaginationModelChange={
+                        setPaginationModel
+                    }
+                    sortModel={
+                        sortModel
+                    }
+                    onSortModelChange={(
+                        model
+                    ) => {
+                        setSortModel(
+                            model
+                        );
+                        resetPage();
+                    }}
+                    pageSizeOptions={[
+                        5,
+                        10,
+                        25,
+                        50,
+                        100,
+                    ]}
+                    disableRowSelectionOnClick
+                />
+            </Box>
+
+            <RecordHistoryDialog
+                open={
+                    historyId !== null
+                }
+                recordType="service_call"
+                recordId={historyId}
+                onClose={() =>
+                    setHistoryId(null)
+                }
+            />
+        </Box>
     );
-    },
-},
-{
-    field: "atm_id",
-    headerName: "ATM ID",
-    width: 100,
-},
-{
-    field: "technician_id",
-    headerName: "Technician ID",
-    width: 130,
-},
-];
-
-if (loading) {
-return <CircularProgress />;
-}
-
-return (
-<Box>
-    <Typography variant="h5" sx={{ mb: 2 }}>
-    Service Calls
-    </Typography>
-
-    {error && (
-    <Alert severity="error" sx={{ mb: 2 }}>
-        {error}
-    </Alert>
-    )}
-
-    <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-    <TextField
-        size="small"
-        label="Search"
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-    />
-
-    <TextField
-        select
-        size="small"
-        label="Priority"
-        value={priorityFilter}
-        onChange={(event) =>
-        setPriorityFilter(event.target.value)
-        }
-        sx={{ width: 130 }}
-    >
-        <MenuItem value="All">All</MenuItem>
-        <MenuItem value="Low">Low</MenuItem>
-        <MenuItem value="Medium">Medium</MenuItem>
-        <MenuItem value="Critical">Critical</MenuItem>
-    </TextField>
-
-    <TextField
-        select
-        size="small"
-        label="Status"
-        value={statusFilter}
-        onChange={(event) =>
-        setStatusFilter(event.target.value)
-        }
-        sx={{ width: 150 }}
-    >
-        <MenuItem value="All">All</MenuItem>
-        <MenuItem value="Pending">Pending</MenuItem>
-        <MenuItem value="In-Progress">In-Progress</MenuItem>
-        <MenuItem value="Completed">Completed</MenuItem>
-        <MenuItem value="Failed">Failed</MenuItem>
-    </TextField>
-    </Stack>
-
-    <Box sx={{ height: 400, width: "100%" }}>
-    <DataGrid
-        rows={filteredServiceCalls}
-        columns={columns}
-        getRowId={(row) => row.id}
-    />
-    </Box>
-</Box>
-);
 }
